@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carts
+  labels:
+    app.kubernetes.io/component: service
+    app.kubernetes.io/name: carts
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: service
+      app.kubernetes.io/name: carts
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: service
+        app.kubernetes.io/name: carts
+    spec:
+      containers:
+      - name: carts
+        image: public.ecr.aws/aws-containers/retail-store-sample-cart:0.7.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        resources:
+          limits:
+            memory: 512Mi
+          requests:
+            cpu: 250m
+            memory: 512Mi
