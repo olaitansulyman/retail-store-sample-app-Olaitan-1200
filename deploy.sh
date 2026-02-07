@@ -43,13 +43,13 @@ kubectl create namespace retail-app --dry-run=client -o yaml | kubectl apply -f 
 
 kubectl create secret generic catalog-db \
   --from-literal=endpoint=$MYSQL_ENDPOINT \
-  --from-literal=username=admin \
+  --from-literal=username=dbadmin \
   --from-literal=password=BedrockPass123! \
   -n retail-app --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl create secret generic orders-db \
   --from-literal=endpoint=$POSTGRES_ENDPOINT \
-  --from-literal=username=admin \
+  --from-literal=username=dbadmin \
   --from-literal=password=BedrockPass123! \
   -n retail-app --dry-run=client -o yaml | kubectl apply -f -
 

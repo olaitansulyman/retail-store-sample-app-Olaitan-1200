@@ -37,3 +37,20 @@ output "lambda_function_name" {
   description = "Lambda function name"
   value       = module.s3_lambda.lambda_function_name
 }
+
+output "developer_user_arn" {
+  description = "Developer IAM user ARN"
+  value       = module.iam.developer_user_arn
+}
+
+output "developer_access_key_id" {
+  description = "Developer access key ID"
+  value       = module.iam.developer_access_key_id
+  sensitive   = true
+}
+
+output "developer_secret_access_key" {
+  description = "Developer secret access key"
+  value       = module.iam.developer_secret_access_key
+  sensitive   = true
+}
