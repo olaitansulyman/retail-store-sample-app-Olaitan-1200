@@ -1,157 +1,113 @@
-# Project Bedrock - Production-Grade Microservices on AWS EKS
+# Project Bedrock — AWS EKS Microservices Deployment Lab
 
-## Overview
-This project deploys a production-grade retail store application on AWS EKS with RDS databases, S3/Lambda event processing, and ALB ingress.
+A hands-on cloud/DevOps portfolio project exploring infrastructure as code and deployment of a sample retail microservices application on AWS. This repository documents a learning implementation; it should not be interpreted as evidence of a live production service or production operations experience.
+
+## Architecture
+
+- **Infrastructure:** Terraform
+- **Networking:** VPC with public/private subnets and security groups
+- **Container orchestration:** Amazon EKS
+- **Data services:** Amazon RDS (MySQL and PostgreSQL)
+- **Event processing:** Amazon S3 and AWS Lambda
+- **Ingress:** AWS Load Balancer Controller and Application Load Balancer
+- **Deployment:** Kubernetes manifests managed with Kustomize
+- **Automation:** GitHub Actions
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for the design notes and [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) for deployment instructions.
+
+## Repository layout
+
+```text
+.
+├── .github/workflows/       # Terraform workflow
+├── terraform/               # Root Terraform configuration and modules
+├── kustomize/base/           # Kubernetes resources
+├── ARCHITECTURE.md           # Architecture notes
+├── DEPLOYMENT_GUIDE.md       # Deployment guide
+├── deploy.sh                 # Deployment helper
+└── README.md
+```
 
 ## Prerequisites
-- AWS CLI configured
+
+- AWS CLI configured with an appropriately scoped IAM identity
 - Terraform >= 1.0
 - kubectl
-- Git
+- Kustomize (or kubectl with Kustomize support)
+- An AWS account with the required service permissions
 
-## Project Structure
-```
-project-bedrock/
-├── terraform/           # Infrastructure as Code
-│   ├── modules/
-│   │   ├── vpc/        # VPC with public/private subnets
-│   │   ├── eks/        # EKS cluster and node groups
-│   │   ├── rds/        # MySQL and PostgreSQL databases
-│   │   ├── s3-lambda/  # S3 bucket and Lambda processor
-│   │   └── iam/        # Developer IAM user and RBAC
-│   ├── main.tf
-│   ├── variables.tf
-│   └── outputs.tf
-├── kustomize/          # Kubernetes manifests
-│   └── base/
-└── .github/workflows/  # CI/CD pipeline
-```
+## Deployment outline
 
-## Deployment Steps
+1. Review the Terraform configuration, variables, and estimated AWS costs.
+2. Configure credentials using an AWS-supported mechanism such as an IAM role, IAM Identity Center, or short-lived environment credentials. Do not commit credentials.
+3. Initialize and review the Terraform plan:
 
-### 1. Create Terraform Backend (One-time setup)
+   ```bash
+   cd terraform
+   terraform init
+   terraform validate
+   terraform plan
+   ```
+
+4. Apply only after reviewing the plan and confirming the resources and costs:
+
+   ```bash
+   terraform apply
+   ```
+
+5. Configure kubectl for the cluster:
+
+   ```bash
+   aws eks update-kubeconfig --name project-bedrock-cluster --region us-east-1
+   ```
+
+6. Create the application namespace and required Kubernetes secrets using secure values supplied at deployment time. Do not place real credentials in manifests, shell history, source control, or README examples.
+7. Deploy and verify the application:
+
+   ```bash
+   kubectl apply -k kustomize/base/
+   kubectl get pods -n retail-app
+   kubectl get ingress -n retail-app
+   ```
+
+## Database credentials and Kubernetes secrets
+
+The following is a **placeholder-only** example. Replace values locally with credentials obtained from a secure secret store. For a real deployment, prefer AWS Secrets Manager or another managed secret store with an approved synchronization mechanism; avoid passing production passwords as literal command-line arguments.
+
 ```bash
-cd terraform
-aws s3api create-bucket \
-  --bucket bedrock-terraform-state-alt-soe-025-1200 \
-  --region us-east-1
-
-aws s3api put-bucket-versioning \
-  --bucket bedrock-terraform-state-alt-soe-025-1200 \
-  --versioning-configuration Status=Enabled
-
-aws dynamodb create-table \
-  --table-name bedrock-terraform-locks \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST \
-  --region us-east-1
-```
-
-### 2. Deploy Infrastructure
-```bash
-terraform init
-terraform plan
-terraform apply
-```
-
-### 3. Configure kubectl
-```bash
-aws eks update-kubeconfig --name project-bedrock-cluster --region us-east-1
-```
-
-### 4. Create Database Secrets
-```bash
-# Get RDS endpoints from Terraform outputs
-MYSQL_ENDPOINT=$(terraform output -raw rds_mysql_endpoint)
-POSTGRES_ENDPOINT=$(terraform output -raw rds_postgres_endpoint)
-
-# Create secrets
 kubectl create secret generic catalog-db \
-  --from-literal=endpoint=$MYSQL_ENDPOINT \
-  --from-literal=username=dbadmin \
-  --from-literal=password=BedrockPass123! \
-  -n retail-app
-
-kubectl create secret generic orders-db \
-  --from-literal=endpoint=$POSTGRES_ENDPOINT \
-  --from-literal=username=dbadmin \
-  --from-literal=password=BedrockPass123! \
+  --from-literal=endpoint="$MYSQL_ENDPOINT" \
+  --from-literal=username="$MYSQL_USERNAME" \
+  --from-literal=password="$MYSQL_PASSWORD" \
   -n retail-app
 ```
 
-### 5. Deploy Application
-```bash
-kubectl apply -k kustomize/base/
-```
+Use a separate secret for each database and grant workloads only the access they require. Never commit populated secret manifests, Terraform state containing secret values, kubeconfig files, or credential exports.
 
-### 6. Verify Deployment
-```bash
-kubectl get pods -n retail-app
-kubectl get ingress -n retail-app
-```
+## CI/CD
 
-### 7. Get Application URL
-```bash
-kubectl get ingress retail-store-ingress -n retail-app -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
-```
-
-### 8. Test Lambda Function
-```bash
-BUCKET_NAME=$(terraform output -raw assets_bucket_name)
-echo "test" > test.txt
-aws s3 cp test.txt s3://$BUCKET_NAME/
-aws logs tail /aws/lambda/bedrock-asset-processor --follow
-```
-
-### 9. Generate Grading File
-```bash
-terraform output -json > grading.json
-```
-
-## Developer Access Credentials
-After deployment, retrieve the developer credentials:
-```bash
-terraform output developer_access_key_id
-terraform output developer_secret_access_key
-```
-
-## CI/CD Pipeline
-The GitHub Actions pipeline automatically:
-- Runs `terraform plan` on pull requests
-- Runs `terraform apply` on merge to main
-- Generates `grading.json` after successful deployment
-
-### Setup GitHub Secrets
-Add these secrets to your GitHub repository:
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-
-## Resource Naming (Critical for Grading)
-- EKS Cluster: `project-bedrock-cluster`
-- VPC Name Tag: `project-bedrock-vpc`
-- Namespace: `retail-app`
-- IAM User: `bedrock-dev-view`
-- S3 Bucket: `bedrock-assets-alt-soe-025-1200`
-- Lambda: `bedrock-asset-processor`
-- All resources tagged with `Project: Bedrock`
+The repository includes a GitHub Actions workflow under `.github/workflows/`. Review its permissions, triggers, and deployment behavior before enabling it. Configure any required cloud access through GitHub Actions secrets or, preferably, GitHub OIDC with a narrowly scoped AWS IAM role. Do not add long-lived AWS access keys to workflow files.
 
 ## Cleanup
+
+Remove Kubernetes resources and destroy lab infrastructure when finished to avoid ongoing AWS charges:
+
 ```bash
 kubectl delete -k kustomize/base/
+cd terraform
 terraform destroy
 ```
 
-## Troubleshooting
+Review the destroy plan before confirming. Some resources may incur charges while running, including EKS, load balancers, NAT gateways, and databases.
 
-### Pods not starting
-```bash
-kubectl describe pod <pod-name> -n retail-app
-kubectl logs <pod-name> -n retail-app
-```
+## Security notes
 
-### RDS connection issues
-Check security groups allow traffic from EKS nodes to RDS.
+- Do not commit real passwords, access keys, private keys, kubeconfig files, or populated Terraform state.
+- Treat Terraform state as sensitive even when the state file appears to contain only infrastructure metadata.
+- Use least-privilege IAM policies and short-lived credentials.
+- Use GitHub OIDC for AWS workflow authentication where supported.
+- Rotate any credential that may have been exposed in a public repository.
 
-### ALB not created
-Verify AWS Load Balancer Controller is installed and running.
+## Project scope
+
+This repository is a portfolio/lab exercise. The architecture and manifests describe the intended implementation; verify the current code, successful deployment evidence, and cloud resources before treating any component as operational.
